@@ -363,9 +363,10 @@ footer a:hover { text-decoration: underline; }
       <span class="badge-sub">SUB</span>
       <span class="badge-mpl2">MPL2</span>
       <span class="badge-otr">oTx</span>
+      <span class="badge-srt">SRT</span>
       <span class="badge-zip">ZIP</span>
     </div>
-    <input type="file" id="fileInput" multiple accept=".ass,.ssa,.vtt,.smi,.sub,.mpl2,.txt,.zip">
+    <input type="file" id="fileInput" multiple accept=".ass,.ssa,.vtt,.smi,.sub,.mpl2,.txt,.srt,.zip">
   </div>
 
   <!-- CONTROLS -->
@@ -471,6 +472,8 @@ function detectFormat(filename, content) {
   if (/^\{\d+\}\{\d*\}/m.test(first20)) return 'microdvd';
   // MPL2
   if (/^\[\d+\]\[\d*\]/m.test(first20)) return 'mpl2';
+  // SRT (re-convert broken files)
+  if (/^\d+\s*\n\d{2}:\d{2}:\d{2}[,\.]\d{3}\s*-->\s*\d{2}:\d{2}:\d{2}[,\.]\d{3}/m.test(trimmed)) return 'srt';
   // oTranscribe
   if (/^\[\d{2}:\d{2}:\d{2}\]/.test(trimmed.split('\n')[0])) return 'otranscribe';
 
@@ -480,6 +483,7 @@ function detectFormat(filename, content) {
   if (['.smi'].includes(e)) return 'smi';
   if (['.sub'].includes(e)) return 'microdvd';
   if (['.mpl2'].includes(e)) return 'mpl2';
+  if (['.srt'].includes(e)) return 'srt';
   if (['.txt'].includes(e)) {
     if (/^\d+\s*\n\s*\d{2}:\d{2}:\d{2}/.test(trimmed.slice(0, 100))) return 'mpl2';
     return 'otranscribe';
@@ -663,6 +667,42 @@ function parseOtranscribe(text) {
   return cues;
 }
 
+// --- SRT parser (re-convert broken files) ---
+function parseSRT(text) {
+  const lines = text.replace(/\r\n/g, '\n').split('\n');
+  const cues = [];
+  let i = 0;
+  while (i < lines.length) {
+    // skip blank lines
+    while (i < lines.length && lines[i].trim() === '') i++;
+    if (i >= lines.length) break;
+    // index line (optional - skip it)
+    if (/^\d+$/.test(lines[i].trim())) i++;
+    while (i < lines.length && lines[i].trim() === '') i++;
+    if (i >= lines.length) break;
+    // timecode line
+    const tl = lines[i].trim();
+    const arrow = tl.indexOf('-->');
+    if (arrow < 0) { i++; continue; }
+    const startRaw = tl.slice(0, arrow).trim();
+    const endRaw = tl.slice(arrow + 3).trim().split(/[\s\t]/)[0];
+    i++;
+    // text lines
+    let textLines = [];
+    while (i < lines.length && lines[i].trim() !== '' && !/-->/.test(lines[i]) && !/^\d+$/.test(lines[i].trim())) {
+      textLines.push(lines[i].trimRight());
+      i++;
+    }
+    const start = parseSrtTime(startRaw);
+    const end = parseSrtTime(endRaw);
+    const txt = textLines.join('\n').trim();
+    if (txt && start < end) {
+      cues.push({ start, end, text: txt });
+    }
+  }
+  return cues;
+}
+
 // --- SRT generator ---
 function toSRT(cues, fileBase) {
   const lines = [];
@@ -735,6 +775,7 @@ function parseFileContent(fileObj, textContent, fps) {
   let cues = [];
   try {
     switch (fmt) {
+      case 'srt': cues = parseSRT(textContent); break;
       case 'vtt': cues = parseVTT(textContent); break;
       case 'ass': cues = parseASS(textContent); break;
       case 'smi': cues = parseSMI(textContent); break;
@@ -838,7 +879,7 @@ async function processZipFile(zipFileObj) {
     let addedCount = 0;
     for (const e of entries) {
       const extName = ext(e.path);
-      if (!['.ass', '.ssa', '.vtt', '.smi', '.sub', '.mpl2', '.txt'].includes(extName)) continue;
+      if (!['.ass', '.ssa', '.vtt', '.smi', '.sub', '.mpl2', '.txt', '.srt'].includes(extName)) continue;
       const content = await e.entry.async('text');
       if (!content.trim() || isBinary(content)) continue;
       const nameParts = e.path.replace(/\\/g, '/').split('/');
