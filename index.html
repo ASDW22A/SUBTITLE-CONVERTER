@@ -1,0 +1,1047 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SUBTITLE CONVERTER</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+:root {
+  --bg: #0a0a1a;
+  --surface: #10102a;
+  --surface2: #181840;
+  --cyan: #00f0ff;
+  --magenta: #ff00aa;
+  --green: #00ff41;
+  --orange: #ff6600;
+  --purple: #aa44ff;
+  --yellow: #ffee00;
+  --text: #e0e0ff;
+  --muted: #6666aa;
+  --glow-cyan: 0 0 7px #00f0ff66, 0 0 20px #00f0ff22;
+  --glow-magenta: 0 0 7px #ff00aa66, 0 0 20px #ff00aa22;
+  --glow-green: 0 0 7px #00ff4166, 0 0 20px #00ff4122;
+}
+html { font-size: 16px; }
+body {
+  font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+  line-height: 1.5;
+}
+::selection { background: var(--cyan); color: #000; }
+::-webkit-scrollbar { width: 8px; }
+::-webkit-scrollbar-track { background: var(--bg); }
+::-webkit-scrollbar-thumb { background: var(--surface2); border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: var(--muted); }
+
+/* HEADER */
+header {
+  text-align: center;
+  padding: 2rem 1rem 1rem;
+  border-bottom: 1px solid rgba(0, 240, 255, 0.15);
+}
+header h1 {
+  font-size: clamp(1.6rem, 5vw, 2.8rem);
+  font-weight: 800;
+  letter-spacing: 0.15em;
+  background: linear-gradient(135deg, var(--cyan), var(--magenta), var(--green));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  text-shadow: none;
+  filter: drop-shadow(0 0 30px rgba(0,240,255,0.3));
+}
+header p {
+  color: var(--muted);
+  margin-top: 0.5rem;
+  font-size: 0.95rem;
+}
+
+/* MAIN */
+main { max-width: 820px; margin: 0 auto; padding: 1.5rem 1rem 4rem; }
+
+/* DROP ZONE */
+.drop-zone {
+  position: relative;
+  border: 2px dashed rgba(0, 240, 255, 0.4);
+  border-radius: 16px;
+  padding: 3rem 1.5rem;
+  text-align: center;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  background: rgba(0, 240, 255, 0.02);
+  animation: borderGlow 4s ease-in-out infinite;
+}
+.drop-zone:hover, .drop-zone.dragover {
+  border-color: var(--cyan);
+  background: rgba(0, 240, 255, 0.06);
+  box-shadow: var(--glow-cyan), inset 0 0 60px rgba(0,240,255,0.03);
+}
+@keyframes borderGlow {
+  0%, 100% { border-color: rgba(0, 240, 255, 0.4); }
+  33% { border-color: rgba(255, 0, 170, 0.4); }
+  66% { border-color: rgba(0, 255, 65, 0.4); }
+}
+.drop-zone-icon {
+  font-size: 3rem;
+  margin-bottom: 0.75rem;
+  opacity: 0.8;
+}
+.drop-zone h2 { font-size: 1.3rem; font-weight: 600; color: var(--text); }
+.drop-zone p.sub { font-size: 0.85rem; color: var(--muted); margin-top: 0.25rem; }
+.drop-zone .formats {
+  display: flex; flex-wrap: wrap; gap: 0.4rem;
+  justify-content: center; margin-top: 1rem;
+}
+.drop-zone .formats span {
+  padding: 0.15rem 0.6rem;
+  border-radius: 4px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  border: 1px solid currentColor;
+}
+.drop-zone input[type="file"] { display: none; }
+
+/* FORMAT BADGES */
+.badge-ass { color: var(--cyan); border-color: var(--cyan); }
+.badge-vtt { color: var(--magenta); border-color: var(--magenta); }
+.badge-smi { color: var(--green); border-color: var(--green); }
+.badge-sub { color: var(--orange); border-color: var(--orange); }
+.badge-mpl2 { color: var(--yellow); border-color: var(--yellow); }
+.badge-otr { color: var(--purple); border-color: var(--purple); }
+.badge-srt { color: var(--text); border-color: var(--text); }
+.badge-zip { color: var(--cyan); border-color: var(--cyan); }
+.badge-unknown { color: #ff4444; border-color: #ff4444; }
+
+/* CONTROLS */
+.controls {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin-top: 1.25rem;
+  flex-wrap: wrap;
+}
+.controls .fps-group {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.controls .fps-group label {
+  font-size: 0.85rem;
+  color: var(--muted);
+  white-space: nowrap;
+}
+.controls .fps-group input {
+  width: 6rem;
+  padding: 0.4rem 0.6rem;
+  background: var(--surface);
+  border: 1px solid rgba(0, 240, 255, 0.3);
+  border-radius: 6px;
+  color: var(--text);
+  font-size: 0.85rem;
+  outline: none;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+.controls .fps-group input:focus {
+  border-color: var(--cyan);
+  box-shadow: var(--glow-cyan);
+}
+.controls .fps-group.hidden { display: none; }
+
+/* BUTTONS */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  padding: 0.6rem 1.4rem;
+  border: none;
+  border-radius: 8px;
+  font-size: 0.85rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  cursor: pointer;
+  transition: all 0.2s;
+  text-transform: uppercase;
+}
+.btn-cyan {
+  background: linear-gradient(135deg, #00c8d6, #00f0ff);
+  color: #000;
+  box-shadow: 0 0 15px rgba(0,240,255,0.3);
+}
+.btn-cyan:hover { box-shadow: 0 0 25px rgba(0,240,255,0.6); transform: translateY(-1px); }
+.btn-cyan:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+.btn-magenta {
+  background: linear-gradient(135deg, #cc0088, #ff00aa);
+  color: #fff;
+  box-shadow: 0 0 15px rgba(255,0,170,0.3);
+}
+.btn-magenta:hover { box-shadow: 0 0 25px rgba(255,0,170,0.6); transform: translateY(-1px); }
+.btn-green {
+  background: linear-gradient(135deg, #00cc33, #00ff41);
+  color: #000;
+  box-shadow: 0 0 15px rgba(0,255,65,0.3);
+}
+.btn-green:hover { box-shadow: 0 0 25px rgba(0,255,65,0.6); transform: translateY(-1px); }
+.btn-sm { padding: 0.4rem 0.9rem; font-size: 0.75rem; }
+
+/* FILE LIST */
+.file-list { margin-top: 1.5rem; }
+.file-list .empty-state {
+  text-align: center;
+  padding: 2rem;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+.file-card {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.7rem 1rem;
+  background: var(--surface);
+  border: 1px solid rgba(0, 240, 255, 0.1);
+  border-radius: 10px;
+  margin-bottom: 0.5rem;
+  transition: all 0.2s;
+}
+.file-card:hover { border-color: rgba(0, 240, 255, 0.25); }
+.file-card .fname {
+  flex: 1;
+  font-size: 0.9rem;
+  word-break: break-all;
+}
+.file-card .fname .size {
+  font-size: 0.75rem;
+  color: var(--muted);
+  margin-left: 0.4rem;
+}
+.file-card .fbadge {
+  font-size: 0.7rem;
+  font-weight: 700;
+  padding: 0.15rem 0.5rem;
+  border-radius: 4px;
+  border: 1px solid;
+  white-space: nowrap;
+  letter-spacing: 0.04em;
+}
+.file-card .fstatus {
+  font-size: 0.75rem;
+  color: var(--muted);
+  white-space: nowrap;
+}
+.file-card .fstatus.ok { color: var(--green); }
+.file-card .fstatus.err { color: #ff4444; }
+.file-card .remove-btn {
+  background: none;
+  border: none;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 1.2rem;
+  line-height: 1;
+  padding: 0.2rem;
+  transition: color 0.2s;
+}
+.file-card .remove-btn:hover { color: #ff4444; }
+
+/* RESULTS */
+.results { margin-top: 1.5rem; }
+.results .r-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.75rem;
+}
+.results .r-header h3 {
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--text);
+}
+.results .r-header .count { color: var(--muted); font-size: 0.85rem; }
+.result-card {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.7rem 1rem;
+  background: var(--surface);
+  border: 1px solid rgba(0, 255, 65, 0.15);
+  border-radius: 10px;
+  margin-bottom: 0.5rem;
+  transition: all 0.2s;
+}
+.result-card:hover { border-color: rgba(0, 255, 65, 0.3); }
+.result-card .rname {
+  flex: 1;
+  font-size: 0.9rem;
+  word-break: break-all;
+}
+.result-card .rcues {
+  font-size: 0.75rem;
+  color: var(--muted);
+}
+
+/* TOAST */
+.toast {
+  position: fixed;
+  bottom: 1.5rem;
+  right: 1.5rem;
+  padding: 0.8rem 1.2rem;
+  border-radius: 10px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  background: var(--surface2);
+  border: 1px solid var(--cyan);
+  color: var(--text);
+  box-shadow: var(--glow-cyan);
+  opacity: 0;
+  transform: translateY(10px);
+  transition: all 0.3s ease;
+  pointer-events: none;
+  z-index: 100;
+}
+.toast.show { opacity: 1; transform: translateY(0); }
+.toast.error { border-color: #ff4444; box-shadow: 0 0 10px #ff444466; }
+
+/* FOOTER */
+footer {
+  text-align: center;
+  padding: 2rem;
+  color: var(--muted);
+  font-size: 0.8rem;
+  border-top: 1px solid rgba(0, 240, 255, 0.1);
+}
+footer a { color: var(--cyan); text-decoration: none; }
+footer a:hover { text-decoration: underline; }
+
+/* responsive */
+@media (max-width: 600px) {
+  .controls { flex-direction: column; align-items: stretch; }
+  .controls .fps-group { justify-content: center; }
+  .file-card, .result-card { flex-wrap: wrap; }
+  .toast { left: 1rem; right: 1rem; bottom: 1rem; text-align: center; }
+}
+
+/* SPINNER */
+.spinner {
+  display: inline-block;
+  width: 16px;
+  height: 16px;
+  border: 2px solid rgba(255,255,255,0.2);
+  border-top-color: var(--cyan);
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>// SUBTITLE CONVERTER</h1>
+  <p>Any format to SRT &mdash; no limits, no uploads, all in your browser</p>
+</header>
+
+<main>
+  <!-- DROP ZONE -->
+  <div class="drop-zone" id="dropZone">
+    <div class="drop-zone-icon">&#x25CB;</div>
+    <h2>Drop subtitle files here</h2>
+    <p class="sub">or click to browse</p>
+    <div class="formats">
+      <span class="badge-ass">ASS</span>
+      <span class="badge-ass">SSA</span>
+      <span class="badge-vtt">VTT</span>
+      <span class="badge-smi">SMI</span>
+      <span class="badge-sub">SUB</span>
+      <span class="badge-mpl2">MPL2</span>
+      <span class="badge-otr">oTx</span>
+      <span class="badge-zip">ZIP</span>
+    </div>
+    <input type="file" id="fileInput" multiple accept=".ass,.ssa,.vtt,.smi,.sub,.mpl2,.txt,.zip">
+  </div>
+
+  <!-- CONTROLS -->
+  <div class="controls">
+    <div class="fps-group hidden" id="fpsGroup">
+      <label for="fpsInput">FPS (frame-based):</label>
+      <input type="number" id="fpsInput" value="23.976" step="0.001" min="1" max="120">
+    </div>
+    <button class="btn btn-cyan" id="convertBtn" disabled>CONVERT ALL</button>
+  </div>
+
+  <!-- FILE LIST -->
+  <div class="file-list" id="fileList">
+    <div class="empty-state">No files selected</div>
+  </div>
+
+  <!-- RESULTS -->
+  <div class="results" id="results" style="display:none">
+    <div class="r-header">
+      <h3>Converted</h3>
+      <span class="count" id="resultCount"></span>
+    </div>
+    <div id="resultsContainer"></div>
+    <div style="margin-top:0.75rem;text-align:right">
+      <button class="btn btn-green btn-sm" id="downloadAllBtn">&#x25BC; Download All as ZIP</button>
+    </div>
+  </div>
+</main>
+
+<footer>
+  <p>Built with &#x2661; &mdash; fully client-side, zero server uploads</p>
+  <p style="margin-top:0.25rem"><a href="https://github.com" target="_blank">GitHub</a></p>
+</footer>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ============================================================
+// UTILITY
+// ============================================================
+const NAME = {
+  vtt: 'WebVTT', ass: 'ASS/SSA', smi: 'SMI',
+  microdvd: 'MicroDVD', mpl2: 'MPL2', otranscribe: 'oTranscribe',
+  srt: 'SRT', zip: 'ZIP', unknown: 'Unknown'
+};
+const BADGE = {
+  vtt: 'badge-vtt', ass: 'badge-ass', smi: 'badge-smi',
+  microdvd: 'badge-sub', mpl2: 'badge-mpl2', otranscribe: 'badge-otr',
+  srt: 'badge-srt', zip: 'badge-zip', unknown: 'badge-unknown'
+};
+
+function ext(filename) {
+  const i = filename.lastIndexOf('.');
+  return i < 0 ? '' : filename.slice(i).toLowerCase();
+}
+
+function formatBytes(b) {
+  if (b < 1024) return b + ' B';
+  if (b < 1048576) return (b / 1024).toFixed(1) + ' KB';
+  return (b / 1048576).toFixed(1) + ' MB';
+}
+
+function msToSrt(ms) {
+  const h = Math.floor(ms / 3600000);
+  const m = Math.floor((ms % 3600000) / 60000);
+  const s = Math.floor((ms % 60000) / 1000);
+  const ml = Math.floor(ms % 1000);
+  return String(h).padStart(2, '0') + ':' +
+         String(m).padStart(2, '0') + ':' +
+         String(s).padStart(2, '0') + ',' +
+         String(ml).padStart(3, '0');
+}
+
+function parseSrtTime(t) {
+  const m = t.match(/(\d+):(\d+):(\d+)[,.](\d+)/);
+  if (!m) return 0;
+  return parseInt(m[1]) * 3600000 + parseInt(m[2]) * 60000 +
+         parseInt(m[3]) * 1000 + parseInt(m[4].padEnd(3, '0').slice(0, 3));
+}
+
+function showToast(msg, isError) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.className = 'toast' + (isError ? ' error' : '') + ' show';
+  clearTimeout(el._t);
+  el._t = setTimeout(() => el.classList.remove('show'), 3500);
+}
+
+const BOM_RE = /^\uFEFF/;
+
+function detectFormat(filename, content) {
+  const trimmed = content.trim();
+  const first20 = trimmed.split('\n').slice(0, 20).join('\n');
+
+  // VTT
+  if (/^WEBVTT\b/m.test(trimmed)) return 'vtt';
+  // ASS/SSA
+  if (/\[Script Info\]/i.test(trimmed) || /\[V4\+? Styles\]/i.test(trimmed)) return 'ass';
+  // SMI
+  if (/<SAMI\b/i.test(trimmed)) return 'smi';
+  if (/<SYNC\s+Start\s*=/i.test(trimmed)) return 'smi';
+  // MicroDVD
+  if (/^\{\d+\}\{\d*\}/m.test(first20)) return 'microdvd';
+  // MPL2
+  if (/^\[\d+\]\[\d*\]/m.test(first20)) return 'mpl2';
+  // oTranscribe
+  if (/^\[\d{2}:\d{2}:\d{2}\]/.test(trimmed.split('\n')[0])) return 'otranscribe';
+
+  const e = ext(filename);
+  if (['.ass', '.ssa'].includes(e)) return 'ass';
+  if (['.vtt'].includes(e)) return 'vtt';
+  if (['.smi'].includes(e)) return 'smi';
+  if (['.sub'].includes(e)) return 'microdvd';
+  if (['.mpl2'].includes(e)) return 'mpl2';
+  if (['.txt'].includes(e)) {
+    if (/^\d+\s*\n\s*\d{2}:\d{2}:\d{2}/.test(trimmed.slice(0, 100))) return 'mpl2';
+    return 'otranscribe';
+  }
+  if (['.zip'].includes(e)) return 'zip';
+  return 'unknown';
+}
+
+function isBinary(text) {
+  return /[\x00-\x08\x0B\x0C\x0E-\x1F]/.test(text.slice(0, 512));
+}
+
+// ============================================================
+// PARSERS
+// ============================================================
+
+// --- WebVTT ---
+function parseVTT(text) {
+  const lines = text.replace(/\r\n/g, '\n').split('\n');
+  const cues = [];
+  let i = 0;
+  // skip blank lines and WEBVTT header
+  while (i < lines.length && !/-->/.test(lines[i])) i++;
+  while (i < lines.length) {
+    const tl = lines[i].trim();
+    if (!tl || tl === '') { i++; continue; }
+    const arrow = tl.indexOf('-->');
+    if (arrow < 0) { i++; continue; }
+    const startRaw = tl.slice(0, arrow).trim();
+    const endRaw = tl.slice(arrow + 3).trim().split(/[\s\t]/)[0];
+    i++;
+    let textLines = [];
+    while (i < lines.length && lines[i].trim() !== '' && !/-->/.test(lines[i])) {
+      textLines.push(lines[i].trimRight());
+      i++;
+    }
+    const start = parseSrtTime(startRaw.replace(',', '.'));
+    const end = parseSrtTime(endRaw.replace(',', '.'));
+    const txt = textLines.join('\n').trim();
+    if (txt && start < end) {
+      cues.push({ start, end, text: txt });
+    }
+  }
+  return cues;
+}
+
+// --- ASS/SSA ---
+function parseASS(text) {
+  text = text.replace(/\r\n/g, '\n');
+  // Find [Events] section and extract Format line
+  const eventsIdx = text.indexOf('[Events]');
+  if (eventsIdx < 0) return [];
+  const eventsSection = text.slice(eventsIdx);
+  const formatMatch = eventsSection.match(/^Format\s*:\s*(.*)$/im);
+  if (!formatMatch) return [];
+  const cols = formatMatch[1].split(',').map(c => c.trim());
+  const startIdx = cols.indexOf('Start');
+  const endIdx = cols.indexOf('End');
+  const textIdx = cols.indexOf('Text');
+  if (startIdx < 0 || endIdx < 0 || textIdx < 0) return [];
+
+  const dialogueLines = eventsSection.split('\n').filter(l => /^Dialogue:/i.test(l.trim()));
+  const cues = [];
+  for (const line of dialogueLines) {
+    const parts = line.split(',');
+    if (parts.length <= Math.max(startIdx, endIdx, textIdx)) continue;
+    const startRaw = parts[startIdx].trim();
+    const endRaw = parts[endIdx].trim();
+    const textRaw = parts.slice(textIdx).join(',').trim();
+    const start = parseSrtTime(startRaw);
+    const end = parseSrtTime(endRaw);
+    if (start >= end) continue;
+    let txt = textRaw
+      .replace(/\{([^}]*)\}/g, '')   // strip {\\...} codes
+      .replace(/\\N/g, '\n')          // ASS newline
+      .replace(/\\n/g, '\n')          // soft newline
+      .replace(/\\h/g, ' ')           // non-breaking space
+      .trim();
+    if (txt) cues.push({ start, end, text: txt });
+  }
+  return cues;
+}
+
+// --- SMI ---
+function parseSMI(text) {
+  const cues = [];
+  const syncRe = /<SYNC\s+Start\s*=\s*(\d+)\s*>([\s\S]*?)(?=(?:<SYNC|\s*$))/gi;
+  let match;
+  const blocks = [];
+  while ((match = syncRe.exec(text)) !== null) {
+    blocks.push({ start: parseInt(match[1]), content: match[2] });
+  }
+  if (blocks.length === 0) return [];
+
+  // remove HTML tags from content
+  function stripHTML(s) {
+    return s.replace(/<br\s*\/?>/gi, '\n')
+            .replace(/<[^>]+>/g, '')
+            .replace(/&nbsp;/g, ' ')
+            .replace(/&amp;/g, '&')
+            .replace(/&lt;/g, '<')
+            .replace(/&gt;/g, '>')
+            .replace(/&quot;/g, '"')
+            .trim();
+  }
+
+  for (let i = 0; i < blocks.length; i++) {
+    const start = blocks[i].start;
+    const end = i + 1 < blocks.length ? blocks[i + 1].start : start + 3000;
+    const txt = stripHTML(blocks[i].content);
+    if (txt && start < end) {
+      cues.push({ start, end, text: txt });
+    }
+  }
+  return cues;
+}
+
+// --- MicroDVD ---
+function parseMicroDVD(text, fps) {
+  fps = fps || 23.976;
+  const lines = text.replace(/\r\n/g, '\n').split('\n');
+  const cues = [];
+  for (const line of lines) {
+    const m = line.match(/^\{(\d+)\}\{(\d*)\}(.*)/);
+    if (!m) continue;
+    const startFrame = parseInt(m[1]);
+    const endFrame = m[2] !== '' ? parseInt(m[2]) : startFrame + 24;
+    const txt = m[3].trim();
+    if (!txt) continue;
+    const start = Math.round(startFrame / fps * 1000);
+    const end = Math.round(endFrame / fps * 1000);
+    if (start < end) {
+      cues.push({ start, end, text: txt.replace(/\|/g, '\n') });
+    }
+  }
+  return cues;
+}
+
+// --- MPL2 ---
+function parseMPL2(text, fps) {
+  fps = fps || 23.976;
+  const lines = text.replace(/\r\n/g, '\n').split('\n');
+  const cues = [];
+  for (const line of lines) {
+    const m = line.match(/^\[(\d+)\]\[(\d*)\](.*)/);
+    if (!m) continue;
+    const startFrame = parseInt(m[1]);
+    const endFrame = m[2] !== '' ? parseInt(m[2]) : startFrame + 24;
+    const txt = m[3].trim();
+    if (!txt) continue;
+    const start = Math.round(startFrame / fps * 1000);
+    const end = Math.round(endFrame / fps * 1000);
+    if (start < end) {
+      cues.push({ start, end, text: txt.replace(/\|/g, '\n') });
+    }
+  }
+  return cues;
+}
+
+// --- oTranscribe ---
+function parseOtranscribe(text) {
+  const lines = text.replace(/\r\n/g, '\n').split('\n');
+  const cues = [];
+  const parsed = [];
+  for (const line of lines) {
+    const m = line.match(/^\[(\d+):(\d+):(\d+)\]\s*(.*)/);
+    if (m) {
+      const ms = parseInt(m[1]) * 3600000 + parseInt(m[2]) * 60000 + parseInt(m[3]) * 1000;
+      const txt = m[4].trim();
+      if (txt) parsed.push({ ms, text: txt });
+    }
+  }
+  for (let i = 0; i < parsed.length; i++) {
+    const start = parsed[i].ms;
+    const end = i + 1 < parsed.length ? parsed[i + 1].ms : start + 3000;
+    const txt = parsed[i].text;
+    if (start < end) {
+      cues.push({ start, end, text: txt });
+    }
+  }
+  return cues;
+}
+
+// --- SRT generator ---
+function toSRT(cues, fileBase) {
+  const lines = [];
+  for (let i = 0; i < cues.length; i++) {
+    lines.push(String(i + 1));
+    lines.push(msToSrt(cues[i].start) + ' --> ' + msToSrt(cues[i].end));
+    lines.push(cues[i].text);
+    lines.push('');
+  }
+  return {
+    filename: fileBase + '.srt',
+    content: lines.join('\n'),
+    count: cues.length
+  };
+}
+
+// ============================================================
+// FILE HANDLING
+// ============================================================
+
+const files = []; // { id, file, name, size, format, status, error? }
+
+let fileIdCounter = 0;
+
+function addFiles(fileList) {
+  const newFiles = [];
+  for (const f of fileList) {
+    // skip duplicates by name + size
+    if (files.some(x => x.name === f.name && x.size === f.size)) continue;
+    const id = ++fileIdCounter;
+    files.push({ id, file: f, name: f.name, size: f.size, format: null, status: 'pending', error: null, cues: null });
+    newFiles.push(files[files.length - 1]);
+  }
+  // auto-detect formats for new files
+  for (const f of newFiles) {
+    if (ext(f.name) === '.zip') {
+      f.format = 'zip';
+    } else {
+      f.format = detectFormat(f.name, '');
+    }
+  }
+  renderFileList();
+  updateConvertBtn();
+}
+
+function removeFile(id) {
+  const idx = files.findIndex(x => x.id === id);
+  if (idx >= 0) {
+    files.splice(idx, 1);
+    renderFileList();
+    updateConvertBtn();
+    if (files.length === 0) {
+      document.getElementById('results').style.display = 'none';
+    }
+  }
+}
+
+function updateConvertBtn() {
+  const btn = document.getElementById('convertBtn');
+  const hasFiles = files.some(f => f.format !== 'zip' && f.format !== 'unknown' && f.status === 'pending');
+  btn.disabled = !hasFiles;
+  updateFpsVisibility();
+}
+
+// ============================================================
+// PARSER DISPATCH
+// ============================================================
+function parseFileContent(fileObj, textContent, fps) {
+  const fmt = fileObj.format;
+  let cues = [];
+  try {
+    switch (fmt) {
+      case 'vtt': cues = parseVTT(textContent); break;
+      case 'ass': cues = parseASS(textContent); break;
+      case 'smi': cues = parseSMI(textContent); break;
+      case 'microdvd': cues = parseMicroDVD(textContent, fps); break;
+      case 'mpl2': cues = parseMPL2(textContent, fps); break;
+      case 'otranscribe': cues = parseOtranscribe(textContent); break;
+      default: return null;
+    }
+  } catch (e) {
+    return null;
+  }
+  return cues;
+}
+
+// ============================================================
+// CONVERSION
+// ============================================================
+let results = [];
+
+async function convertAll() {
+  const fps = parseFloat(document.getElementById('fpsInput').value) || 23.976;
+  const convertBtn = document.getElementById('convertBtn');
+  convertBtn.disabled = true;
+  convertBtn.innerHTML = '<span class="spinner"></span>';
+
+  results = [];
+  let hasFpsFormat = false;
+
+  for (const f of files) {
+    if (f.format === 'zip') continue;
+    if (f.format === 'unknown') {
+      f.status = 'error';
+      f.error = 'Unknown format';
+      continue;
+    }
+    if (f.status !== 'pending') continue;
+
+    try {
+      const text = await f.file.text();
+      if (text.length === 0) {
+        f.status = 'error';
+        f.error = 'Empty file';
+        continue;
+      }
+      if (isBinary(text)) {
+        f.status = 'error';
+        f.error = 'Binary file (not a text subtitle)';
+        continue;
+      }
+
+      // re-detect format based on content
+      const detected = detectFormat(f.name, text);
+      if (detected === 'unknown' || detected === 'zip') {
+        f.format = detected;
+        f.status = 'error';
+        f.error = 'Unrecognized subtitle format';
+        continue;
+      }
+      if (detected !== f.format) f.format = detected;
+
+      const cues = parseFileContent(f, text, fps);
+      if (!cues || cues.length === 0) {
+        f.status = 'error';
+        f.error = 'Could not extract subtitles';
+        continue;
+      }
+
+      const base = f.name.replace(/\.[^.]+$/, '');
+      const result = toSRT(cues, base);
+      results.push({ ...result, fileId: f.id, origName: f.name });
+      f.status = 'ok';
+      f.cues = cues;
+    } catch (e) {
+      f.status = 'error';
+      f.error = e.message || 'Read error';
+    }
+  }
+
+  // Hide fps group if no frame-based formats found
+  hasFpsFormat = files.some(f => f.format === 'microdvd' || f.format === 'mpl2');
+  document.getElementById('fpsGroup').classList.toggle('hidden', !hasFpsFormat);
+
+  convertBtn.innerHTML = 'CONVERT ALL';
+  convertBtn.disabled = false;
+  renderFileList();
+  renderResults();
+  updateConvertBtn();
+}
+
+// ============================================================
+// ZIP INPUT
+// ============================================================
+async function processZipFile(zipFileObj) {
+  try {
+    const data = await zipFileObj.file.arrayBuffer();
+    const zip = await JSZip.loadAsync(data);
+    const entries = [];
+    zip.forEach((path, entry) => {
+      if (!entry.dir) entries.push({ path, entry });
+    });
+    let addedCount = 0;
+    for (const e of entries) {
+      const extName = ext(e.path);
+      if (!['.ass', '.ssa', '.vtt', '.smi', '.sub', '.mpl2', '.txt'].includes(extName)) continue;
+      const content = await e.entry.async('text');
+      if (!content.trim() || isBinary(content)) continue;
+      const nameParts = e.path.replace(/\\/g, '/').split('/');
+      const name = nameParts[nameParts.length - 1];
+      if (files.some(x => x.name === name && x.size === content.length)) continue;
+      const fakeFile = new File([content], name, { type: 'text/plain' });
+      const id = ++fileIdCounter;
+      const detected = detectFormat(name, content);
+      if (detected === 'unknown') continue;
+      files.push({
+        id, file: fakeFile, name, size: content.length,
+        format: detected, status: 'pending', error: null, cues: null
+      });
+      addedCount++;
+    }
+    // remove the zip entry itself
+    const zipIdx = files.findIndex(f => f.id === zipFileObj.id);
+    if (zipIdx >= 0) files.splice(zipIdx, 1);
+    renderFileList();
+    updateConvertBtn();
+    if (addedCount === 0) showToast('No supported subtitle files found in ZIP', true);
+  } catch (e) {
+    showToast('Failed to read ZIP file', true);
+  }
+}
+
+// ============================================================
+// DOWNLOADS
+// ============================================================
+function downloadFile(content, filename) {
+  const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+async function downloadAllZip() {
+  if (results.length === 0) return;
+  const zip = new JSZip();
+  for (const r of results) {
+    zip.file(r.filename, r.content);
+  }
+  try {
+    const blob = await zip.generateAsync({ type: 'blob' });
+    downloadFile(blob, 'converted-subtitles.zip');
+  } catch (e) {
+    showToast('Failed to create ZIP', true);
+  }
+}
+
+// ============================================================
+// UI RENDERING
+// ============================================================
+function renderFileList() {
+  const container = document.getElementById('fileList');
+  if (files.length === 0) {
+    container.innerHTML = '<div class="empty-state">No files selected</div>';
+    return;
+  }
+  let html = '';
+  for (const f of files) {
+    const fmtClass = BADGE[f.format] || 'badge-unknown';
+    const fmtName = NAME[f.format] || 'Unknown';
+    let statusHtml = '';
+    if (f.status === 'pending') statusHtml = '<span class="fstatus">&#x25CB;</span>';
+    else if (f.status === 'ok') statusHtml = '<span class="fstatus ok">&#x2713; Converted</span>';
+    else if (f.status === 'error') statusHtml = '<span class="fstatus err">&#x2717; ' + (f.error || 'Error') + '</span>';
+
+    html += '<div class="file-card">';
+    html += '<span class="fbadge ' + fmtClass + '">' + fmtName + '</span>';
+    html += '<span class="fname">' + escHtml(f.name) + ' <span class="size">' + formatBytes(f.size) + '</span></span>';
+    html += statusHtml;
+    html += '<button class="remove-btn" data-id="' + f.id + '" title="Remove">&#x2715;</button>';
+    html += '</div>';
+  }
+  container.innerHTML = html;
+
+  // remove handlers
+  container.querySelectorAll('.remove-btn').forEach(btn => {
+    btn.addEventListener('click', () => removeFile(parseInt(btn.dataset.id)));
+  });
+  updateFpsVisibility();
+}
+
+function escHtml(s) {
+  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+function renderResults() {
+  const container = document.getElementById('results');
+  const list = document.getElementById('resultsContainer');
+  const count = document.getElementById('resultCount');
+
+  if (results.length === 0) {
+    container.style.display = 'none';
+    return;
+  }
+
+  container.style.display = 'block';
+  count.textContent = results.length + ' file' + (results.length !== 1 ? 's' : '');
+
+  let html = '';
+  for (const r of results) {
+    html += '<div class="result-card">';
+    html += '<span class="fbadge badge-srt">SRT</span>';
+    html += '<span class="rname">' + escHtml(r.filename) + '</span>';
+    html += '<span class="rcues">' + r.count + ' cues</span>';
+    html += '<button class="btn btn-magenta btn-sm download-single" data-id="' + r.fileId + '">&#x25BC;</button>';
+    html += '</div>';
+  }
+  list.innerHTML = html;
+
+  list.querySelectorAll('.download-single').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const r = results.find(x => x.fileId === parseInt(btn.dataset.id));
+      if (r) downloadFile(r.content, r.filename);
+    });
+  });
+}
+
+// ============================================================
+// EVENT BINDING
+// ============================================================
+const dropZone = document.getElementById('dropZone');
+const fileInput = document.getElementById('fileInput');
+
+// Click to browse
+dropZone.addEventListener('click', () => fileInput.click());
+
+// File input change
+fileInput.addEventListener('change', () => {
+  if (fileInput.files.length > 0) {
+    handleFiles(fileInput.files);
+    fileInput.value = '';
+  }
+});
+
+// Drag and drop
+dropZone.addEventListener('dragover', (e) => {
+  e.preventDefault();
+  dropZone.classList.add('dragover');
+});
+dropZone.addEventListener('dragleave', () => {
+  dropZone.classList.remove('dragover');
+});
+dropZone.addEventListener('drop', (e) => {
+  e.preventDefault();
+  dropZone.classList.remove('dragover');
+  if (e.dataTransfer.files.length > 0) {
+    handleFiles(e.dataTransfer.files);
+  }
+});
+
+// Convert button
+document.getElementById('convertBtn').addEventListener('click', convertAll);
+
+// Download all button
+document.getElementById('downloadAllBtn').addEventListener('click', downloadAllZip);
+
+function updateFpsVisibility() {
+  const hasFps = files.some(f => f.format === 'microdvd' || f.format === 'mpl2');
+  document.getElementById('fpsGroup').classList.toggle('hidden', !hasFps);
+}
+
+// Drop outside drop zone still works
+document.body.addEventListener('dragover', (e) => {
+  if (!e.target.closest('.drop-zone')) e.preventDefault();
+});
+document.body.addEventListener('drop', (e) => {
+  if (!e.target.closest('.drop-zone') && e.dataTransfer.files.length > 0) {
+    e.preventDefault();
+    handleFiles(e.dataTransfer.files);
+  }
+});
+
+// shared drop/input handler
+function handleFiles(fileList) {
+  const zips = [];
+  const others = [];
+  for (const f of fileList) {
+    if (ext(f.name) === '.zip') zips.push(f);
+    else others.push(f);
+  }
+  if (others.length > 0) addFiles(others);
+  if (zips.length > 0 && typeof JSZip === 'undefined') {
+    showToast('JSZip library failed to load. Cannot process ZIP files.', true);
+    return;
+  }
+  for (const z of zips) {
+    addFiles([z]);
+    const added = files.find(f => f.name === z.name && f.size === z.size);
+    if (added) processZipFile(added);
+  }
+}
+
+console.log('%c SUBTITLE CONVERTER ',
+  'background:#0a0a1a;color:#00f0ff;font-size:16px;font-weight:bold;padding:8px;border:2px solid #00f0ff;border-radius:6px');
+console.log('All processing happens client-side. No files are uploaded.');
+</script>
+</body>
+</html>
