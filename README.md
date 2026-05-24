@@ -22,8 +22,6 @@ Convert any subtitle format to SRT — no limits, no uploads, all in your browse
 - Auto-detects subtitle format from content or extension
 - No file size/count limits
 - No server uploads — everything stays local
-- Neon cyberpunk UI with animated glow effects
-
 
 ## License
 
